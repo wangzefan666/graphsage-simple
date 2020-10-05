@@ -54,7 +54,7 @@ def load_cora():
     labels = np.empty((num_nodes, 1), dtype=np.int64)
     node_map = {}
     label_map = {}
-    with open("../cora/cora.content") as fp:
+    with open("cora/cora.content") as fp:
         for i, line in enumerate(fp):
             info = line.strip().split()
             feat_data[i, :] = list(map(float, info[1:-1]))
@@ -64,7 +64,7 @@ def load_cora():
             labels[i] = label_map[info[-1]]
 
     adj_lists = defaultdict(set)
-    with open("../cora/cora.cites") as fp:
+    with open("cora/cora.cites") as fp:
         for i, line in enumerate(fp):
             info = line.strip().split()
             paper1 = node_map[info[0]]
@@ -76,7 +76,7 @@ def load_cora():
 
 def run_cora():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    # 设置随机种子,固定结果
+    # setting random seed
     seed = 424
     np.random.seed(seed)
     random.seed(seed)
@@ -97,7 +97,7 @@ def run_cora():
     enc1 = Encoder(features, num_feat, num_embed, adj_lists, agg1, device, gcn=True)
     agg2 = MeanAggregator(lambda nodes: enc1(nodes), device)
     enc2 = Encoder(lambda nodes: enc1(nodes), num_embed, num_embed, adj_lists, agg2, device,
-                   gcn=True)
+                   base_model=enc1, gcn=True)
     enc1.num_samples = 5
     enc2.num_samples = 5
 
@@ -111,7 +111,7 @@ def run_cora():
     times = []
     for batch in range(100):
         batch_nodes = train[:256]
-        # 重新打乱顺序，达到随机批抽样的目的
+        # shuffle to random sampling
         random.shuffle(train)
         start_time = time.time()
         optimizer.zero_grad()
@@ -127,11 +127,11 @@ def run_cora():
     val_output = graphsage.forward(val)
     test_output = graphsage.forward(test)
     # average：
-    #   micro  直接求整体的F1-score
-    #   macro  求出各类别的F1-score后再作平均
+    #   micro  total F1-score
+    #   macro  average of F1 of all classes
     print("Validation F1:", f1_score(labels[val], val_output.cpu().data.numpy().argmax(axis=1), average="micro"))
     print("Test F1:", f1_score(labels[test], test_output.cpu().data.numpy().argmax(axis=1), average="micro"))
-    print("Average batch time:", np.mean(times))  # numpy 可以直接作用于 list
+    print("Average batch time:", np.mean(times))  # numpy's param can be list
 
 
 def load_pubmed():
@@ -141,7 +141,7 @@ def load_pubmed():
     feat_data = np.zeros((num_nodes, num_feats))
     labels = np.empty((num_nodes, 1), dtype=np.int64)
     node_map = {}
-    with open("../pubmed-data/Pubmed-Diabetes.NODE.paper.tab") as fp:
+    with open("pubmed-data/Pubmed-Diabetes.NODE.paper.tab") as fp:
         fp.readline()
         feat_map = {entry.split(":")[1]: i - 1 for i, entry in enumerate(fp.readline().split("\t"))}
         for i, line in enumerate(fp):
@@ -152,7 +152,7 @@ def load_pubmed():
                 word_info = word_info.split("=")
                 feat_data[i][feat_map[word_info[0]]] = float(word_info[1])
     adj_lists = defaultdict(set)
-    with open("../pubmed-data/Pubmed-Diabetes.DIRECTED.cites.tab") as fp:
+    with open("pubmed-data/Pubmed-Diabetes.DIRECTED.cites.tab") as fp:
         fp.readline()
         fp.readline()
         for line in fp:
@@ -165,7 +165,7 @@ def load_pubmed():
 
 
 def run_pubmed():
-    # 设置随机种子,固定结果
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     seed = 123
     np.random.seed(seed)
     random.seed(seed)
@@ -179,21 +179,20 @@ def run_pubmed():
     feat_data, labels, adj_lists = load_pubmed()
     features = nn.Embedding(num_nodes, num_feat)
     features.weight = nn.Parameter(torch.FloatTensor(feat_data), requires_grad=False)
-    features.cuda()
+    features.to(device)
 
-    # 使用了 gcn 作为 aggregator
-    agg1 = MeanAggregator(features)
-    enc1 = Encoder(features, num_feat, num_embed, adj_lists, agg1, gcn=True, cuda=True)
-    agg2 = MeanAggregator(lambda nodes: enc1(nodes), cuda=True)
-    enc2 = Encoder(lambda nodes: enc1(nodes), num_embed, num_embed, adj_lists, agg2,
-                   gcn=True, cuda=True)
-    # 对于不同层次使用了不同的采样数目
-    # 采样数目与论文相符
+    # use gcn as aggregator
+    agg1 = MeanAggregator(features, device)
+    enc1 = Encoder(features, num_feat, num_embed, adj_lists, agg1, device, gcn=True)
+    agg2 = MeanAggregator(lambda nodes: enc1(nodes), device)
+    enc2 = Encoder(lambda nodes: enc1(nodes), num_embed, num_embed, adj_lists, agg2, device,
+                   base_model=enc1, gcn=True)
+    # use different nums for different layer according to the paper
     enc1.num_samples = 10
     enc2.num_samples = 25
 
     graphsage = SupervisedGraphSage(3, enc2)
-    graphsage.cuda()
+    graphsage.to(device)
     rand_indices = np.random.permutation(num_nodes)
     test = rand_indices[:1000]
     val = rand_indices[1000:1500]
@@ -222,7 +221,5 @@ def run_pubmed():
 
 
 if __name__ == "__main__":
-    os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
-    torch.cuda.set_device(0)
     run_cora()
     # run_pubmed()

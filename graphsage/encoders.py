@@ -10,7 +10,7 @@ class Encoder(nn.Module):
     """
 
     def __init__(self, features, feature_dim, embed_dim, adj_lists, aggregator, device,
-                 num_sample=10, gcn=False):
+                 base_model=None, num_sample=10, gcn=False):
         super(Encoder, self).__init__()
 
         self.features = features
@@ -19,7 +19,8 @@ class Encoder(nn.Module):
         self.adj_lists = adj_lists
         self.aggregator = aggregator
         self.num_sample = num_sample
-
+        if base_model is not None:
+            self.base_model = base_model
         self.gcn = gcn
         self.deivce = device
 
