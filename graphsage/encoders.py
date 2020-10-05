@@ -34,7 +34,7 @@ class Encoder(nn.Module):
 
         nodes     -- list of nodes
         """
-        # 调用聚合函数，注意这里的取样数
+        # call aggregator, pay attention to the num_sample
         # (batch, feat_dim)
         neigh_feats = self.aggregator.forward(
             nodes, [self.adj_lists[int(node)] for node in nodes], self.num_sample)
@@ -42,7 +42,7 @@ class Encoder(nn.Module):
         if not self.gcn:
             self_feats = self.features(torch.LongTensor(nodes).to(self.device))
             combined = torch.cat([self_feats, neigh_feats], dim=1)  # (batch, 2 * feat_dim)
-        # 如果是 gcn 作为 aggregator, 则不进行串联
+        # use gcn as aggregator, not concat
         else:
             combined = neigh_feats
 

@@ -31,16 +31,13 @@ class MeanAggregator(nn.Module):
 
     def forward(self, nodes, to_neighs, num_sample=10):
         """
-        聚合邻接点特征作为目标节点特征
+        aggregate Adjacent points' features to become target node's feature
 
         output:
             nodes --- list of nodes in a batch
             to_neighs --- list of sets, each set is the set of neighbors for node in batch
             num_sample --- number of neighbors to sample. No sampling if None.
         """
-        # 从目标节点的邻接点集合中作固定数目的采样
-        # 若邻接点数量小于要求,则直接将邻接点集加入
-        # ~原论文中若邻接点数量小于要求,则进行可放回的采样满足要求
         _set = set
         _sample = random.sample
         samp_neighs = [_set(_sample(to_neigh, num_sample))
@@ -49,7 +46,7 @@ class MeanAggregator(nn.Module):
         if self.gcn:
             samp_neighs = [samp_neigh + {nodes[i]} for i, samp_neigh in enumerate(samp_neighs)]
 
-        # 构建局部邻接矩阵,并进行归一化
+        # build local Adjacency matrix, and normalize it
         unique_nodes_list = list(set.union(*samp_neighs))
         unique_nodes = {n: i for i, n in enumerate(unique_nodes_list)}
         column_indices = [unique_nodes[n] for samp_neigh in samp_neighs for n in samp_neigh]
@@ -60,11 +57,11 @@ class MeanAggregator(nn.Module):
         num_neigh = mask.sum(1, keepdim=True)
         mask = mask.div(num_neigh)
 
-        # 构建局部特征矩阵
+        # build local feature matrix
         # (num_nodes&neighs, ) -> (num_nodes&neighs, num_feat)
         embed_matrix = self.features(torch.LongTensor(unique_nodes_list).to(self.device))
 
-        # 将邻接点的平均特征向量作为目标节点的特征
+        # use average of Adjacent points' features as target node's feature
         # (num_nodes, num_nodes&neighs) * (num_nodes&neighs, num_feat) -> (num_nodes, num_feat)
         to_feats = mask.mm(embed_matrix)
         return to_feats

@@ -104,7 +104,7 @@ def run_cora():
     graphsage = SupervisedGraphSage(num_classes, enc2)
     graphsage.to(device)
     optimizer = torch.optim.SGD(filter(lambda p: p.requires_grad, graphsage.parameters()), lr=0.7)
-    rand_indices = np.random.permutation(num_nodes)  # 随机排列一个下标序列
+    rand_indices = np.random.permutation(num_nodes)  # shuffle index
     test = rand_indices[:1000]
     val = rand_indices[1000:1500]
     train = list(rand_indices[1500:])
